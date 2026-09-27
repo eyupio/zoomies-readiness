@@ -119,6 +119,9 @@ function platform(label) {
   else if (/macos|darwin/.test(normal)) os = "macos";
 
   let arch = /arm64|aarch64|-arm(?:-|$)/.test(normal) ? "arm64" : "x64";
+  // GitHub-hosted macos-14 and newer default to Apple Silicon hardware, so an
+  // unqualified label like "macos-14" is arm64 even though it carries no arch
+  // suffix. The "-large" variants are the one exception: they stay Intel x64.
   if (
     os === "macos" &&
     /^macos-(1[4-9]|[2-9][0-9])(?:$|-)/.test(normal) &&
