@@ -15,6 +15,19 @@ const managedVendors = [
   "warp",
 ];
 
+function isZoomies(label) {
+  const normal = label.toLowerCase();
+  return normal === "zoomies" || normal.startsWith("zoomies-");
+}
+
+// Every existing target is extended by each alternative, so a runs-on list
+// with several matrix or conditional entries expands to all combinations.
+function appendAlternatives(targets, alternatives) {
+  return targets.flatMap((target) =>
+    alternatives.map((alternative) => [...target, alternative]),
+  );
+}
+
 function listWorkflowFiles(directory) {
   if (!fs.existsSync(directory)) return [];
   return fs
@@ -47,10 +60,7 @@ function conditionalTargets(value) {
   if (!match) return null;
   const candidates = [match[2], match[4]];
   return candidates.every(
-    (candidate) =>
-      isManaged(candidate) ||
-      candidate.toLowerCase() === "zoomies" ||
-      candidate.toLowerCase().startsWith("zoomies-"),
+    (candidate) => isManaged(candidate) || isZoomies(candidate),
   )
     ? candidates
     : null;
@@ -78,17 +88,13 @@ function resolveTargets(value, job) {
           reason: `matrix.${matrixKey} is computed or has no static string values`,
         };
       }
-      targets = targets.flatMap((target) =>
-        values.map((matrixValue) => [...target, matrixValue]),
-      );
+      targets = appendAlternatives(targets, values);
       continue;
     }
     if (item.includes("${{")) {
       const alternatives = conditionalTargets(item);
       if (alternatives) {
-        targets = targets.flatMap((target) =>
-          alternatives.map((alternative) => [...target, alternative]),
-        );
+        targets = appendAlternatives(targets, alternatives);
         continue;
       }
       return {
@@ -152,9 +158,7 @@ function classifyTarget(labels, pools) {
   const lower = clean.map((label) => label.toLowerCase());
   const rendered = clean.length === 1 ? clean[0] : `[${clean.join(", ")}]`;
 
-  if (
-    lower.some((label) => label === "zoomies" || label.startsWith("zoomies-"))
-  ) {
+  if (clean.some(isZoomies)) {
     return {
       status: "already",
       target: rendered,
@@ -210,6 +214,7 @@ function classifyTarget(labels, pools) {
 }
 
 function combineTargets(classifications) {
+  // Worst-first: a job is only as ready as its least ready target.
   const priority = ["unsupported", "review", "ready", "reusable", "already"];
   const status = priority.find((candidate) =>
     classifications.some((item) => item.status === candidate),
